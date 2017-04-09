@@ -1,0 +1,122 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:context="http://www.springframework.org/schema/context"
+	xmlns:util="http://www.springframework.org/schema/util" xmlns:tx="http://www.springframework.org/schema/tx"
+	xmlns:cache="http://www.springframework.org/schema/cache" xmlns:task="http://www.springframework.org/schema/task"
+	xsi:schemaLocation="http://www.springframework.org/schema/beans
+       http://www.springframework.org/schema/beans/spring-beans.xsd
+       http://www.springframework.org/schema/context
+       http://www.springframework.org/schema/context/spring-context.xsd 
+       http://www.springframework.org/schema/tx http://www.springframework.org/schema/tx/spring-tx.xsd 
+       http://www.springframework.org/schema/cache http://www.springframework.org/schema/cache/spring-cache.xsd 
+       http://www.springframework.org/schema/task http://www.springframework.org/schema/task/spring-task.xsd
+       http://www.springframework.org/schema/util http://www.springframework.org/schema/util/spring-util.xsd">
+
+	<context:component-scan base-package="com.bdx">
+		<context:exclude-filter type="annotation"
+			expression="org.springframework.stereotype.Controller" />
+	</context:component-scan>
+
+	<context:property-placeholder location="classpath:/application.properties" />
+
+    <bean id="dataSource" class="com.zaxxer.hikari.HikariDataSource"  destroy-method="close">
+	     <property name="dataSourceClassName" value="${jdbc.dataSourceClassName}"/>
+	     <property name="idleTimeout" value="${jdbc.idleTimeout}" />
+	     <property name="minimumIdle" value="${jdbc.minimumIdle}" />
+	     <property name="maxLifetime" value="${jdbc.maxLifetime}" />
+	     <property name="maximumPoolSize" value="${jdbc.maximumPoolSize}" />
+	     <property name="dataSourceProperties">
+	     	<props>
+	        	<prop key="url">${jdbc.url}</prop>
+	          	<prop key="user">${jdbc.username}</prop>
+	          	<prop key="password">${jdbc.password}</prop>
+	          	<prop key="cachePrepStmts">${jdbc.cachePrepStmts}</prop>
+	          	<prop key="prepStmtCacheSize">${jdbc.prepStmtCacheSize}</prop>
+	          	<prop key="prepStmtCacheSqlLimit">${jdbc.prepStmtCacheSqlLimit}</prop>
+	          	<prop key="useServerPrepStmts">${jdbc.useServerPrepStmts}</prop>
+	     	</props>
+	     </property>
+	</bean>
+
+	<bean id="jdbcTemplate" class="org.springframework.jdbc.core.JdbcTemplate">
+		<property name="dataSource" ref="dataSource"></property>
+	</bean>
+	
+	<bean id="namedParameterJdbcTemplate"
+        class="org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate">
+        <constructor-arg ref="dataSource"></constructor-arg>
+    </bean>
+
+	<bean id="transactionManager"
+		class="org.springframework.jdbc.datasource.DataSourceTransactionManager">
+		<property name="dataSource" ref="dataSource" />
+	</bean>
+
+	<tx:annotation-driven transaction-manager="transactionManager" />
+
+
+	 <!-- Realm实现 -->
+    <bean id="statelessRealm" class="com.bdx.realm.StatelessRealm">
+        <property name="cachingEnabled" value="false"/>
+    </bean>
+
+    <!-- Subject工厂 -->
+    <bean id="subjectFactory" class="com.bdx.mgt.StatelessDefaultSubjectFactory"/>
+
+    <!-- 会话管理器 -->
+    <bean id="sessionManager" class="org.apache.shiro.session.mgt.DefaultSessionManager">
+        <property name="sessionValidationSchedulerEnabled" value="false"/>
+    </bean>
+
+    <!-- 安全管理器 -->
+    <bean id="securityManager" class="org.apache.shiro.web.mgt.DefaultWebSecurityManager">
+        <property name="realm" ref="statelessRealm"/>
+        <property name="subjectDAO.sessionStorageEvaluator.sessionStorageEnabled" value="false"/>
+        <property name="subjectFactory" ref="subjectFactory"/>
+        <property name="sessionManager" ref="sessionManager"/>
+    </bean>
+
+    <!-- 相当于调用SecurityUtils.setSecurityManager(securityManager) -->
+    <bean class="org.springframework.beans.factory.config.MethodInvokingFactoryBean">
+        <property name="staticMethod" value="org.apache.shiro.SecurityUtils.setSecurityManager"/>
+        <property name="arguments" ref="securityManager"/>
+    </bean>
+
+    <bean id="statelessAuthcFilter" class="com.bdx.filter.StatelessAuthcFilter"/>
+
+    <!-- Shiro的Web过滤器 -->
+    <bean id="shiroFilter" class="org.apache.shiro.spring.web.ShiroFilterFactoryBean">
+        <property name="securityManager" ref="securityManager"/>
+        <property name="filters">
+            <util:map>
+                <entry key="statelessAuthc" value-ref="statelessAuthcFilter"/>
+            </util:map>
+        </property>
+        <property name="filterChainDefinitions">
+            <value>
+            	/api/sn/bytype/query = anon
+            	/api/article/** = anon
+                /**=statelessAuthc
+            </value>
+        </property>
+    </bean>
+
+    <!-- Shiro生命周期处理器-->
+    <bean id="lifecycleBeanPostProcessor" class="org.apache.shiro.spring.LifecycleBeanPostProcessor"/>
+
+	<bean id="taskExecutor"
+		class="org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor">
+		<!-- 线程池维护线程所允许的空闲时间 -->
+		<property name="corePoolSize" value="${task.core_pool_size}" />
+		<!-- 线程池维护线程的最大数量 -->
+		<property name="maxPoolSize" value="${task.max_pool_size}" />
+		<!-- 线程池所使用的缓冲队列 -->
+		<property name="queueCapacity" value="${task.queue_capacity}" />
+		<!-- 线程池维护线程所允许的空闲时间 -->
+		<property name="keepAliveSeconds" value="${task.keep_alive_seconds}" />
+	</bean>
+
+	<task:annotation-driven />
+
+
+</beans>

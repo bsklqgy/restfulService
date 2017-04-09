@@ -1,0 +1,5 @@
+/application.properties
+/applicationContext-mvc.xml
+/applicationContext.xml
+/com/
+/log4j2.properties
